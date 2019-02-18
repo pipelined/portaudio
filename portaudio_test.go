@@ -1,5 +1,3 @@
-// +build portaudio
-
 package portaudio_test
 
 import (
