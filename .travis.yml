@@ -11,10 +11,9 @@ env:
     - GO111MODULE=on
     - CODECOV_TOKEN="994b5b99-a41a-4f56-9c75-0e5ae748db97"
 
-addons:
-  ssh_known_hosts:
-  - github.com
-  - ssh.github.com
+before_install:
+  - brew update
+  - brew install portaudio 
 
 script: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
