@@ -1,3 +1,4 @@
+// Package portaudio allows to play audio with Portaudio API.
 package portaudio
 
 import (
