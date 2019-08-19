@@ -64,7 +64,7 @@ func TestPADevices(t *testing.T) {
 
 func TestPipe(t *testing.T) {
 	pa.Initialize()
-	devices, err := pa.Devices()
+	devices, err := portaudio.Devices()
 	assert.Nil(t, err)
 	fmt.Printf("%+v\n", devices)
 	for _, d := range devices {
@@ -76,8 +76,8 @@ func TestPipe(t *testing.T) {
 	// create pump
 	inFile, err := os.Open(wavSample)
 	pump := &wav.Pump{ReadSeeker: inFile}
-	// create sink
-	sink := portaudio.Sink{Device: portaudio.DefaultOutputDevice}
+	// create sink with empty device
+	sink := portaudio.Sink{}
 
 	l, err := pipe.Line(
 		&pipe.Pipe{
@@ -97,6 +97,7 @@ func TestPipe(t *testing.T) {
 func TestDevices(t *testing.T) {
 	devices, err := portaudio.Devices()
 	assert.Nil(t, err)
+	fmt.Printf("%+v\n", devices)
 	for _, d := range devices {
 		fmt.Printf("Device: %v\n", d)
 	}
