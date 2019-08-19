@@ -91,13 +91,14 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]floa
 		SampleRate: float64(sampleRate),
 	}
 	return func(b [][]float64) error {
-		// buffer size has changed
+		// buffer size has changed, recalculate
 		if bufferSize := signal.Float64(b).Size(); currentBufferSize != bufferSize {
 			currentBufferSize = bufferSize
 			buf = make([]float32, bufferSize*numChannels)
+		}
 
-			// TODO: HANDLE STREAM CLOSE/OPEN
-			// s.stream, err = portaudio.OpenDefaultStream(0, numChannels, float64(sampleRate), bufferSize, &buf)
+		// open new stream
+		if s.stream == nil {
 			stream, err := portaudio.OpenStream(*s.streamParams, &buf)
 			if err != nil {
 				return err
