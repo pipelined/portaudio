@@ -79,10 +79,10 @@ type (
 
 // Sink writes the buffer of data to portaudio stream.
 // It aslo initilizes a portaudio api with default stream.
-func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]float64) error, error) {
+func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels int) (func(signal.Float64) error, error) {
 	var (
-		buf               []float32
-		currentBufferSize int
+		buf  []float32
+		size int
 	)
 	s.streamParams = &portaudio.StreamParameters{
 		Output: portaudio.StreamDeviceParameters{
@@ -90,11 +90,12 @@ func (s *Sink) Sink(sourceID string, sampleRate, numChannels int) (func([][]floa
 		},
 		SampleRate: float64(sampleRate),
 	}
-	return func(b [][]float64) error {
+	return func(b signal.Float64) error {
 		// buffer size has changed, recalculate
-		if bufferSize := signal.Float64(b).Size(); currentBufferSize != bufferSize {
-			currentBufferSize = bufferSize
-			buf = make([]float32, bufferSize*numChannels)
+		if size != b.Size() {
+			size = b.Size()
+			buf = make([]float32, size*numChannels)
+			// TODO: open another stream if buffer size changes.
 		}
 
 		// open new stream
