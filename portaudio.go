@@ -2,9 +2,10 @@
 package portaudio
 
 import (
+	"fmt"
+
 	"github.com/gordonklaus/portaudio"
 	"github.com/pipelined/signal"
-	"golang.org/x/xerrors"
 )
 
 //TODO: ADD API TYPE WITH https://crawshaw.io/blog/sharp-edged-finalizers TO HANDLE CASE WHEN TERMINATE WASN'T EXECUTED
@@ -102,12 +103,11 @@ func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels i
 		if s.stream == nil {
 			stream, err := portaudio.OpenStream(*s.streamParams, &buf)
 			if err != nil {
-				return err
+				return fmt.Errorf("error opening PortAudio stream: %w", err)
 			}
 
-			err = stream.Start()
-			if err != nil {
-				return err
+			if err := stream.Start(); err != nil {
+				return fmt.Errorf("error starting PortAudio stream: %w", err)
 			}
 			s.stream = stream
 		}
@@ -117,7 +117,10 @@ func (s *Sink) Sink(sourceID string, sampleRate signal.SampleRate, numChannels i
 				buf[i*numChannels+j] = float32(b[j][i])
 			}
 		}
-		return s.stream.Write()
+		if err := s.stream.Write(); err != nil {
+			return fmt.Errorf("error writing PortAudio buffer: %w", err)
+		}
+		return nil
 	}, nil
 }
 
@@ -126,24 +129,19 @@ func (s *Sink) Reset(string) error {
 	// reset PA
 	err := portaudio.Initialize()
 	if err != nil {
-		return err
+		return fmt.Errorf("error initializing PortAudio: %w", err)
 	}
 
 	// reset device info with valid device
-	var deviceInfo *portaudio.DeviceInfo
-	if s.Device == emptyDevice {
-		deviceInfo, err = portaudio.DefaultOutputDevice()
-	} else {
-		deviceInfo, err = refreshDeviceInfo(s.Device)
-	}
-	// error during device refresh, terminate
+	deviceInfo, err := refreshDeviceInfo(s.Device)
 	if err != nil {
+		// error during device refresh, terminate
 		if errTerm := portaudio.Terminate(); errTerm != nil {
 			// wrap both errors
-			return xerrors.Errorf("failed portaudio terminate: %w after: %w", errTerm, err)
+			return fmt.Errorf("error terminating PortAudio: %w after: %w", errTerm, err)
 		}
 		// wrap cause error
-		return err
+		return fmt.Errorf("error refreshing PortAudio device: %w", err)
 	}
 
 	// update stream params with device
@@ -158,9 +156,9 @@ func (s *Sink) Flush(string) (err error) {
 		if errTerm := portaudio.Terminate(); errTerm != nil {
 			// wrap termination error
 			if err != nil {
-				err = xerrors.Errorf("failed portaudio terminate: %w after: %w", errTerm, err)
+				err = fmt.Errorf("error terminating PortAudio: %w after: %w", errTerm, err)
 			} else {
-				err = xerrors.Errorf("failed portaudio terminate: %w", err)
+				err = fmt.Errorf("error terminating PortAudio: %w", err)
 			}
 		}
 	}()
@@ -169,7 +167,7 @@ func (s *Sink) Flush(string) (err error) {
 	}
 	err = s.stream.Stop()
 	if err != nil {
-		return err
+		return fmt.Errorf("error stopping PortAudio stream: %w", err)
 	}
 	return s.stream.Close()
 }
@@ -177,13 +175,19 @@ func (s *Sink) Flush(string) (err error) {
 // Devices return a list of portaudio devices.
 func Devices() (map[IO][]Device, error) {
 	if err := portaudio.Initialize(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error initializing PortAudio: %w", err)
 	}
 	defer portaudio.Terminate()
 
 	devicesInfo, err := portaudio.Devices()
 	if err != nil {
-		return nil, err
+		// error during device refresh, terminate
+		if errTerm := portaudio.Terminate(); errTerm != nil {
+			// wrap both errors
+			return nil, fmt.Errorf("error terminating PortAudio: %w after: %w", errTerm, err)
+		}
+		// wrap cause error
+		return nil, fmt.Errorf("error fetching PortAudio devices: %w", err)
 	}
 	devices := make(map[IO][]Device)
 	for _, di := range devicesInfo {
@@ -209,10 +213,17 @@ func Devices() (map[IO][]Device, error) {
 // refresh device info for provided device.
 // refreshDeviceInfo MUST be called after successfull portaudio.Initialize.
 func refreshDeviceInfo(d Device) (*portaudio.DeviceInfo, error) {
+	if d == emptyDevice {
+		di, err := portaudio.DefaultOutputDevice()
+		if err != nil {
+			return nil, fmt.Errorf("error refreshing default PortAudio output device: %w", err)
+		}
+		return di, nil
+	}
 	// retrieve APIs
 	apis, err := portaudio.HostApis()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to retrieve host APIs: %w", err)
+		return nil, fmt.Errorf("error retrieving PortAudio host APIs: %w", err)
 	}
 
 	// find API and device
@@ -229,7 +240,7 @@ func refreshDeviceInfo(d Device) (*portaudio.DeviceInfo, error) {
 	if di != nil {
 		return di, nil
 	}
-	return nil, xerrors.Errorf("device %s %s not found", d.api, d.device)
+	return nil, fmt.Errorf("device %s %s not found", d.api, d.device)
 }
 
 func parseDeviceInfo(di *portaudio.DeviceInfo) Device {
