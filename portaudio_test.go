@@ -7,10 +7,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pipelined/pipe"
-	"github.com/pipelined/portaudio"
-	"github.com/pipelined/wav"
 	"github.com/stretchr/testify/assert"
+	"pipelined.dev/pipe"
+	"pipelined.dev/portaudio"
+	"pipelined.dev/wav"
 )
 
 const (
@@ -25,15 +25,15 @@ func TestPipe(t *testing.T) {
 	// create sink with empty device
 	sink := portaudio.Sink{}
 
-	l, err := pipe.Line(
-		&pipe.Pipe{
+	p, err := pipe.New(
+		&pipe.Line{
 			Pump:  pump,
 			Sinks: pipe.Sinks(&sink),
 		},
 	)
 	assert.Nil(t, err)
 
-	err = pipe.Wait(l.Run(context.Background(), bufferSize))
+	err = pipe.Wait(p.Run(context.Background(), bufferSize))
 	assert.Nil(t, err)
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gordonklaus/portaudio"
-	"github.com/pipelined/signal"
+	"pipelined.dev/signal"
 )
 
 //TODO: ADD API TYPE WITH https://crawshaw.io/blog/sharp-edged-finalizers TO HANDLE CASE WHEN TERMINATE WASN'T EXECUTED
