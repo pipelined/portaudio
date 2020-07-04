@@ -21,20 +21,23 @@ const (
 func TestPipe(t *testing.T) {
 	// create pump
 	inFile, err := os.Open(wavSample)
-	pump := &wav.Pump{ReadSeeker: inFile}
+	source := wav.Source{ReadSeeker: inFile}
 	// create sink with empty device
 	sink := portaudio.Sink{}
 
-	p, err := pipe.New(
-		&pipe.Line{
-			Pump:  pump,
-			Sinks: pipe.Sinks(&sink),
-		},
-	)
-	assert.Nil(t, err)
+	line, err := pipe.Routing{
+		Source: source.Source(),
+		Sink:   sink.Sink(),
+	}.Line(bufferSize)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
-	err = pipe.Wait(p.Run(context.Background(), bufferSize))
-	assert.Nil(t, err)
+	p := pipe.New(context.Background(), pipe.WithLines(line))
+	err = p.Wait()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
 func TestDevices(t *testing.T) {
