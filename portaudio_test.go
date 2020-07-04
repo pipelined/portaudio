@@ -7,10 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"pipelined.dev/audio/wav"
 	"pipelined.dev/pipe"
 	"pipelined.dev/portaudio"
-	"pipelined.dev/wav"
 )
 
 const (
@@ -27,7 +26,7 @@ func TestPipe(t *testing.T) {
 
 	line, err := pipe.Routing{
 		Source: source.Source(),
-		Sink:   sink.Sink(),
+		Sink:   sink.Allocator(),
 	}.Line(bufferSize)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -40,8 +39,8 @@ func TestPipe(t *testing.T) {
 	}
 }
 
-func TestDevices(t *testing.T) {
-	devices, err := portaudio.Devices()
-	assert.Nil(t, err)
-	assert.NotNil(t, devices)
-}
+// func TestDevices(t *testing.T) {
+// 	devices, err := portaudio.Devices()
+// 	assert.Nil(t, err)
+// 	assert.NotNil(t, devices)
+// }
