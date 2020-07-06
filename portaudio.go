@@ -11,40 +11,16 @@ import (
 	"pipelined.dev/signal"
 )
 
-// DefaultOutputDevice returns output device used by system as default at the moment.
-func DefaultOutputDevice() (d Device, err error) {
-	if err = portaudio.Initialize(); err != nil {
-		return
-	}
-	defer func() {
-		if errTerm := portaudio.Terminate(); errTerm != nil {
-			err = errTerm
-		}
-	}()
-	var di *portaudio.DeviceInfo
-	if di, err = portaudio.DefaultOutputDevice(); err != nil {
-		return
-	}
-	d = parseDeviceInfo(di)
-	return
+// Initialize initializes internal portaudio structures. Must be called
+// before any other call to this package.
+func Initialize() error {
+	return portaudio.Initialize()
 }
 
-// DefaultInputDevice returns input device used by system as default at the moment.
-func DefaultInputDevice() (d Device, err error) {
-	if err = portaudio.Initialize(); err != nil {
-		return
-	}
-	defer func() {
-		if errTerm := portaudio.Terminate(); errTerm != nil {
-			err = errTerm
-		}
-	}()
-	var di *portaudio.DeviceInfo
-	if di, err = portaudio.DefaultOutputDevice(); err != nil {
-		return
-	}
-	d = parseDeviceInfo(di)
-	return
+// Terminate cleans up internal portaudio structures. Must be called
+// after all streams are closed.
+func Terminate() error {
+	return portaudio.Terminate()
 }
 
 var defaultDevice Device
@@ -52,10 +28,7 @@ var defaultDevice Device
 type (
 	// Device is the device accessed through portaudio.
 	Device struct {
-		api         string
-		device      string
-		outChannels int
-		inChannels  int
+		info *portaudio.DeviceInfo
 	}
 
 	// Sink represets portaudio sink which allows to play audio.
@@ -68,20 +41,13 @@ type (
 // Allocator returns new portaudio sink allocator closure.
 func (s Sink) Allocator() pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		if err := portaudio.Initialize(); err != nil {
-			return pipe.Sink{}, fmt.Errorf("error initializing PortAudio: %w", err)
-		}
-		di, err := deviceInfo(s.Device)
-		if err != nil {
-			// terminate must be called after successful initialize
-			if errTerm := portaudio.Terminate(); errTerm != nil {
-				// wrap both errors
-				return pipe.Sink{}, fmt.Errorf("error terminating PortAudio: %w after: %v", errTerm, err)
+		if s.Device == defaultDevice {
+			device, err := defaultOutputDevice()
+			if err != nil {
+				return pipe.Sink{}, fmt.Errorf("error using default output device: %w", err)
 			}
-			// wrap cause error
-			return pipe.Sink{}, fmt.Errorf("error refreshing PortAudio device: %w", err)
+			s.Device = device
 		}
-
 		pool := pooling.Get(signal.Allocator{
 			Channels: props.Channels,
 			Length:   bufferSize,
@@ -92,8 +58,8 @@ func (s Sink) Allocator() pipe.SinkAllocatorFunc {
 			portaudio.StreamParameters{
 				Output: portaudio.StreamDeviceParameters{
 					Channels: props.Channels,
-					Device:   di,
-					Latency:  di.DefaultLowOutputLatency,
+					Device:   s.Device.info,
+					Latency:  s.Device.info.DefaultLowOutputLatency,
 				},
 				FramesPerBuffer: bufferSize,
 				SampleRate:      float64(props.SampleRate),
@@ -138,22 +104,15 @@ func sink(output chan<- signal.Floating, pool *signal.Pool) pipe.SinkFunc {
 }
 
 func sinkFlusher(stream *portaudio.Stream, output chan signal.Floating) pipe.FlushFunc {
-	return func(context.Context) (err error) {
+	return func(context.Context) error {
 		close(output)
-		defer func() {
-			if errTerm := portaudio.Terminate(); errTerm != nil {
-				// wrap termination error
-				if err != nil {
-					err = fmt.Errorf("error terminating PortAudio: %w after: %v", errTerm, err)
-				} else {
-					err = fmt.Errorf("error terminating PortAudio: %w", err)
-				}
-			}
-		}()
-		if err = stream.Stop(); err != nil {
-			return
+		if err := stream.Stop(); err != nil {
+			return fmt.Errorf("error stopping PortAudio stream: %w", err)
 		}
-		return stream.Close()
+		if err := stream.Close(); err != nil {
+			return fmt.Errorf("error closing PortAudio stream: %w", err)
+		}
+		return nil
 	}
 }
 
@@ -200,47 +159,29 @@ func Devices() ([]Device, []Device, []Device, error) {
 	return input, output, disabled, nil
 }
 
-// refresh device info for provided device.
-// deviceInfo MUST be called after successfull portaudio.Initialize.
-func deviceInfo(d Device) (*portaudio.DeviceInfo, error) {
-	if d == defaultDevice {
-		di, err := portaudio.DefaultOutputDevice()
-		if err != nil {
-			return nil, fmt.Errorf("error refreshing default PortAudio output device: %w", err)
-		}
-		return di, nil
-	}
-	// retrieve APIs
-	apis, err := portaudio.HostApis()
+// defaultOutputDevice returns output device used by system as default at
+// the moment.
+func defaultOutputDevice() (Device, error) {
+	di, err := portaudio.DefaultOutputDevice()
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving PortAudio host APIs: %w", err)
+		return Device{}, nil
 	}
+	return parseDeviceInfo(di), nil
+}
 
-	// find API and device
-	var di *portaudio.DeviceInfo
-	for _, api := range apis {
-		if api.Name == d.api {
-			for _, device := range api.Devices {
-				if device.Name == d.device {
-					di = device
-				}
-			}
-		}
+// defaultInputDevice returns input device used by system as default at the
+// moment.
+func defaultInputDevice() (Device, error) {
+	di, err := portaudio.DefaultInputDevice()
+	if err != nil {
+		return Device{}, err
 	}
-	if di != nil {
-		return di, nil
-	}
-	return nil, fmt.Errorf("device %s %s not found", d.api, d.device)
+	return parseDeviceInfo(di), nil
 }
 
 func parseDeviceInfo(di *portaudio.DeviceInfo) Device {
 	if di == nil {
 		return defaultDevice
 	}
-	return Device{
-		device:      di.Name,
-		api:         di.HostApi.Name,
-		inChannels:  di.MaxInputChannels,
-		outChannels: di.MaxOutputChannels,
-	}
+	return Device{info: di}
 }
