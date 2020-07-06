@@ -21,9 +21,12 @@ func TestPipe(t *testing.T) {
 	// create pump
 	inFile, err := os.Open(wavSample)
 	source := wav.Source{ReadSeeker: inFile}
+
+	portaudio.Initialize()
+	defer portaudio.Terminate()
+
 	// create sink with empty device
 	sink := portaudio.Sink{}
-
 	line, err := pipe.Routing{
 		Source: source.Source(),
 		Sink:   sink.Allocator(),
