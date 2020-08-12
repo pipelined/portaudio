@@ -25,28 +25,27 @@ func Terminate() error {
 
 var defaultDevice Device
 
-type (
-	// Device is the device accessed through portaudio.
-	Device struct {
-		info *portaudio.DeviceInfo
-	}
+// DefaultDevice returns system default device.
+func DefaultDevice() Device {
+	return defaultDevice
+}
 
-	// Sink represets portaudio sink which allows to play audio.
-	// If no device is provided, the current system default will be used.
-	Sink struct {
-		Device
-	}
-)
+// Device is the device accessed through portaudio.
+type Device struct {
+	info *portaudio.DeviceInfo
+}
 
-// Allocator returns new portaudio sink allocator closure.
-func (s Sink) Allocator() pipe.SinkAllocatorFunc {
+// Sink represets portaudio sink which allows to play audio. If no device
+// is provided, the current system default will be used. Sink returns new
+// portaudio sink allocator closure.
+func Sink(d Device) pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		if s.Device == defaultDevice {
+		if d == defaultDevice {
 			device, err := defaultOutputDevice()
 			if err != nil {
 				return pipe.Sink{}, fmt.Errorf("error using default output device: %w", err)
 			}
-			s.Device = device
+			d = device
 		}
 		pool := pooling.Get(signal.Allocator{
 			Channels: props.Channels,
@@ -58,8 +57,8 @@ func (s Sink) Allocator() pipe.SinkAllocatorFunc {
 			portaudio.StreamParameters{
 				Output: portaudio.StreamDeviceParameters{
 					Channels: props.Channels,
-					Device:   s.Device.info,
-					Latency:  s.Device.info.DefaultLowOutputLatency,
+					Device:   d.info,
+					Latency:  d.info.DefaultLowOutputLatency,
 				},
 				FramesPerBuffer: bufferSize,
 				SampleRate:      float64(props.SampleRate),
