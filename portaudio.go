@@ -23,13 +23,6 @@ func Terminate() error {
 	return portaudio.Terminate()
 }
 
-var defaultDevice Device
-
-// DefaultDevice returns system default device.
-func DefaultDevice() Device {
-	return defaultDevice
-}
-
 // Device is the device accessed through portaudio.
 type Device struct {
 	info *portaudio.DeviceInfo
@@ -40,13 +33,6 @@ type Device struct {
 // portaudio sink allocator closure.
 func Sink(d Device) pipe.SinkAllocatorFunc {
 	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		if d == defaultDevice {
-			device, err := defaultOutputDevice()
-			if err != nil {
-				return pipe.Sink{}, fmt.Errorf("error using default output device: %w", err)
-			}
-			d = device
-		}
 		pool := pooling.Get(signal.Allocator{
 			Channels: props.Channels,
 			Length:   bufferSize,
@@ -140,7 +126,7 @@ func Devices() ([]Device, []Device, []Device, error) {
 	disabled := make([]Device, 0)
 	for _, di := range devicesInfo {
 		// create device
-		d := parseDeviceInfo(di)
+		d := Device{info: di}
 		// add device to input
 		if di.MaxInputChannels > 0 {
 			input = append(input, d)
@@ -158,29 +144,22 @@ func Devices() ([]Device, []Device, []Device, error) {
 	return input, output, disabled, nil
 }
 
-// defaultOutputDevice returns output device used by system as default at
+// DefaultOutputDevice returns output device used by system as default at
 // the moment.
-func defaultOutputDevice() (Device, error) {
+func DefaultOutputDevice() (Device, error) {
 	di, err := portaudio.DefaultOutputDevice()
 	if err != nil {
 		return Device{}, nil
 	}
-	return parseDeviceInfo(di), nil
+	return Device{info: di}, nil
 }
 
-// defaultInputDevice returns input device used by system as default at the
+// DefaultInputDevice returns input device used by system as default at the
 // moment.
-func defaultInputDevice() (Device, error) {
+func DefaultInputDevice() (Device, error) {
 	di, err := portaudio.DefaultInputDevice()
 	if err != nil {
 		return Device{}, err
 	}
-	return parseDeviceInfo(di), nil
-}
-
-func parseDeviceInfo(di *portaudio.DeviceInfo) Device {
-	if di == nil {
-		return defaultDevice
-	}
-	return Device{info: di}
+	return Device{info: di}, nil
 }

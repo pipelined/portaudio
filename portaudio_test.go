@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
+	"pipelined.dev/audio/portaudio"
 	"pipelined.dev/audio/wav"
 	"pipelined.dev/pipe"
-	"pipelined.dev/portaudio"
 )
 
 const (
@@ -23,11 +23,15 @@ func TestPipe(t *testing.T) {
 
 	portaudio.Initialize()
 	defer portaudio.Terminate()
+	device, err := portaudio.DefaultOutputDevice()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 
 	// create sink with empty device
 	line, err := pipe.Routing{
 		Source: wav.Source(inFile),
-		Sink:   portaudio.Sink(portaudio.DefaultDevice()),
+		Sink:   portaudio.Sink(device),
 	}.Line(bufferSize)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
