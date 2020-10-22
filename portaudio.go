@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/gordonklaus/portaudio"
+
 	"pipelined.dev/pipe"
-	"pipelined.dev/pipe/pooling"
+	"pipelined.dev/pipe/mutable"
 	"pipelined.dev/signal"
 )
 
@@ -32,12 +33,8 @@ type Device struct {
 // is provided, the current system default will be used. Sink returns new
 // portaudio sink allocator closure.
 func Sink(d Device) pipe.SinkAllocatorFunc {
-	return func(bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
-		pool := pooling.Get(signal.Allocator{
-			Channels: props.Channels,
-			Length:   bufferSize,
-			Capacity: bufferSize,
-		})
+	return func(mut mutable.Context, bufferSize int, props pipe.SignalProperties) (pipe.Sink, error) {
+		pool := signal.GetPoolAllocator(props.Channels, bufferSize, bufferSize)
 		output := make(chan signal.Floating, 1)
 		stream, err := portaudio.OpenStream(
 			portaudio.StreamParameters{
@@ -65,7 +62,7 @@ func Sink(d Device) pipe.SinkAllocatorFunc {
 	}
 }
 
-func сallback(output <-chan signal.Floating, pool *signal.Pool) func([]float32, portaudio.StreamCallbackTimeInfo, portaudio.StreamCallbackFlags) {
+func сallback(output <-chan signal.Floating, pool *signal.PoolAllocator) func([]float32, portaudio.StreamCallbackTimeInfo, portaudio.StreamCallbackFlags) {
 	return func(out []float32, timeInfo portaudio.StreamCallbackTimeInfo, flags portaudio.StreamCallbackFlags) {
 		select {
 		case floats, ok := <-output:
@@ -73,13 +70,13 @@ func сallback(output <-chan signal.Floating, pool *signal.Pool) func([]float32,
 				return
 			}
 			signal.ReadFloat32(floats, out)
-			pool.PutFloat32(floats)
+			floats.Free(pool)
 		default:
 		}
 	}
 }
 
-func sink(output chan<- signal.Floating, pool *signal.Pool) pipe.SinkFunc {
+func sink(output chan<- signal.Floating, pool *signal.PoolAllocator) pipe.SinkFunc {
 	return func(floats signal.Floating) error {
 		buf := pool.GetFloat32()
 		signal.FloatingAsFloating(floats, buf)
