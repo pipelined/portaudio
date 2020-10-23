@@ -25,27 +25,23 @@ func TestPipe(t *testing.T) {
 	defer portaudio.Terminate()
 	device, err := portaudio.DefaultOutputDevice()
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Errorf("PA error: %v", err)
 	}
 
 	// create sink with empty device
-	line, err := pipe.Routing{
-		Source: wav.Source(inFile),
-		Sink:   portaudio.Sink(device),
-	}.Line(bufferSize)
+	p, err := pipe.New(bufferSize,
+		pipe.Routing{
+			Source: wav.Source(inFile),
+			Sink:   portaudio.Sink(device),
+		},
+	)
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+		t.Errorf("pipe error: %v", err)
 	}
 
-	p := pipe.New(context.Background(), pipe.WithLines(line))
-	err = p.Wait()
+	a := p.Async(context.Background())
+	err = a.Await()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
-
-// func TestDevices(t *testing.T) {
-// 	devices, err := portaudio.Devices()
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, devices)
-// }
