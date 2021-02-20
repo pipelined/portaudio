@@ -30,7 +30,7 @@ func TestPipe(t *testing.T) {
 
 	// create sink with empty device
 	p, err := pipe.New(bufferSize,
-		pipe.Routing{
+		pipe.Line{
 			Source: wav.Source(inFile),
 			Sink:   portaudio.Sink(device),
 		},
@@ -39,8 +39,7 @@ func TestPipe(t *testing.T) {
 		t.Errorf("pipe error: %v", err)
 	}
 
-	a := p.Async(context.Background())
-	err = a.Await()
+	err = pipe.Wait(p.Start(context.Background()))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

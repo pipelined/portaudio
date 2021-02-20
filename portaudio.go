@@ -78,7 +78,7 @@ func сallback(output <-chan signal.Floating, pool *signal.PoolAllocator) func([
 
 func sink(output chan<- signal.Floating, pool *signal.PoolAllocator) pipe.SinkFunc {
 	return func(floats signal.Floating) error {
-		buf := pool.GetFloat32()
+		buf := pool.Float32()
 		signal.FloatingAsFloating(floats, buf)
 		output <- buf
 		return nil
