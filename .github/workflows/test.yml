@@ -20,7 +20,7 @@ jobs:
     - name:  Install portaudio
       run: brew install portaudio
     - name: Test
-      run: go test --tags integration --race --coverprofile=coverage.txt --covermode=atomic ./...
+      run: go test --race --coverprofile=coverage.txt --covermode=atomic ./...
     - name: Upload coverage
       uses: codecov/codecov-action@v1
       with:
